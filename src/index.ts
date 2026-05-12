@@ -16,16 +16,30 @@ const JWT_SECRET = process.env.JWT_SECRET || "";
 
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "8h") as any;
 
+
+function extractPassword(body: any): string | undefined {
+    if (!body || typeof body !== 'object') return undefined;
+    if (body.password) return body.password;
+   
+    for (const k of Object.keys(body)) {
+        const key = k.toLowerCase();
+        if (key.includes('pass') || key.includes('contra') || key.includes('cont')) {
+            return body[k];
+        }
+    }
+    return undefined;
+}
+
 app.post('/api/register', async (req: Request, rest: Response): Promise<any> => {
     try {
-        const { email, nombre, password } = req.body;
-
+        const { email, nombre } = req.body;
+        const password = extractPassword(req.body);
 
         if (!email || !password || !nombre) {
             return rest.status(400).json({ error: ' TODOS LOS CAMPOS SON REQUERIDOS' });
         }
 
-        const { data: usuarioExistente } = await supabase.from('Usuarios').select('email').eq('email', email).maybeSingle();
+    const { data: usuarioExistente } = await supabase.from('usuarios').select('email').eq('email', email).maybeSingle();
 
         if (usuarioExistente) {
             return rest.status(400).json({ error: 'El correo ya existe' });
@@ -34,7 +48,7 @@ app.post('/api/register', async (req: Request, rest: Response): Promise<any> => 
         const saltrounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltrounds);
 
-        const { data: nuevoUsuario, error: insertError } = await supabase.from('Usuarios').insert([{
+    const { data: nuevoUsuario, error: insertError } = await supabase.from('usuarios').insert([{
             email: email,
             nombre: nombre,
             contraseña: hashedPassword,
@@ -46,15 +60,17 @@ app.post('/api/register', async (req: Request, rest: Response): Promise<any> => 
             .single();
 
         if (insertError) {
-            return rest.status(500).json({ error: 'Error al registrar el usuario' });
+            console.error('Supabase insert error:', insertError);
+            
+            return rest.status(500).json({ error: 'Error al registrar el usuario', details: insertError.message || insertError });
         }
 
         return rest.status(201).json({ message: 'Usuario registrado correctamente', usuario: nuevoUsuario });
 
 
     } catch (error) {
-        console.log(error);
-        return rest.status(500).json({ error: 'Error al registrar el usuario' });
+        console.error('Register handler error:', error);
+        return rest.status(500).json({ error: 'Error al registrar el usuario', details: String(error) });
     }
 })
 
@@ -62,13 +78,14 @@ app.post('/api/register', async (req: Request, rest: Response): Promise<any> => 
 
 app.post('/api/login', async (req: Request, rest: Response): Promise<any> => {
     try {
-        const { email, password } = req.body;
+        const { email } = req.body;
+        const password = extractPassword(req.body);
 
         if (!email || !password) {
             return rest.status(400).json({ error: 'EMAIL Y CONTRASEÑA SON REQUERIDOS' });
         }
 
-        const { data: usuario, error } = await supabase.from('Usuarios').select('*').eq('email', email).single();
+    const { data: usuario, error } = await supabase.from('usuarios').select('*').eq('email', email).single();
 
         if (error || !usuario) {
             return rest.status(401).json({ error: 'Usuario no encontrado' });
@@ -120,7 +137,7 @@ app.get('/api/perfil', verificartoken, async (req: AuthRequest, res: Response): 
 
 
         const { data: usuario, error } = await supabase
-            .from('Usuarios')
+            .from('usuarios')
             .select('id_usuario, email, nombre, activo, fecha_creacion')
             .eq('id_usuario', userId)
             .single();
