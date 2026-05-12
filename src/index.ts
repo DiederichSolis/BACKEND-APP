@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import cors from "cors";
 import dotenv from "dotenv";
 import { supabase } from "./supabase.js";
-import { verificartoken } from "./middleware/auth.js";
+import { verificartoken, type AuthRequest } from "./middleware/auth.js";
 
 dotenv.config();
 
@@ -112,6 +112,31 @@ app.post('/api/login', async (req: Request, rest: Response): Promise<any> => {
         return rest.status(500).json({ error: 'Error al iniciar sesión' });
     }
 })
+
+app.get('/api/perfil', verificartoken, async (req: AuthRequest, res: Response): Promise<any> => {
+    try {
+
+        const userId = req.usuario.id_usuario;
+
+
+        const { data: usuario, error } = await supabase
+            .from('Usuarios')
+            .select('id_usuario, email, nombre, activo, fecha_creacion')
+            .eq('id_usuario', userId)
+            .single();
+
+        if (error || !usuario) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+
+        return res.status(200).json({ perfil: usuario });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ error: 'Error al obtener el perfil' });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
